@@ -501,6 +501,17 @@ fn test_durable_buffer_recovery_after_outage() {
 
     let run1_signals = 25u64;
 
+    // Platform-specific timing: Windows CI runners are slower, need more time
+    #[cfg(target_os = "windows")]
+    let (run1_duration, run1_shutdown_deadline) = (
+        Duration::from_millis(500),  // Increased from 150ms for Windows
+        Duration::from_millis(1000), // Increased from 200ms for Windows
+    );
+
+    #[cfg(not(target_os = "windows"))]
+    let (run1_duration, run1_shutdown_deadline) =
+        (Duration::from_millis(150), Duration::from_millis(200));
+
     // Run 1: Downstream failing (all NACKs) - data persists to Quiver
     let config = TestConfigBuilder::new(buffer_path.clone())
         .max_signal_count(Some(run1_signals))
@@ -517,12 +528,13 @@ fn test_durable_buffer_recovery_after_outage() {
     // Run 1 with error exporter - we can't detect delivery (all NACKs), but
     // at 500 signals/sec, 25 signals should be generated in ~50ms. Use a short
     // run duration just long enough to generate and persist the data.
+    // Windows needs more time due to slower CI runners.
     run_pipeline(
         config,
         &pipeline_group_id,
         &pipeline_id,
-        Duration::from_millis(150), // Just enough time to generate 25 signals
-        Duration::from_millis(200),
+        run1_duration,
+        run1_shutdown_deadline,
     );
 
     // Verify data was persisted
